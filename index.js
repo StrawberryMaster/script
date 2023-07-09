@@ -87,7 +87,7 @@ interpretCode = (working) => {
                     throw "Feedback declared outside of answer block."
                 }
                 if (parser.declaredFeedback) {
-                    throw `Two answer feedbacks declared for answer ${parser.answer + 1}.`
+                    throw `Multiple answer feedbacks declared for answer ${parser.answer + 1}.`
                 }
 
                 parser.declaredFeedback = true;
@@ -109,7 +109,7 @@ interpretCode = (working) => {
             throw `Non-indicative statement made outside of comment: ${line}`
 
         } catch (e) {
-            let output = `<code style='color:red;'>Error encountered in Question ${parser.question + 1} on <b title="This excludes comments and blank lines.">interpreted line</b> ${i}.<br>${e}</code>`;
+            let output = `<code style='color:red;'>Error encountered in Question ${parser.question + 1} on <b title="This excludes comments and blank lines.">interpreted line</b> ${i + 1}.<br>${e}</code>`;
             return output;
         }
     }
