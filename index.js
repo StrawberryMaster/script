@@ -109,7 +109,7 @@ interpretCode = (working) => {
             throw `Non-indicative statement made outside of comment: ${line}`
 
         } catch (e) {
-            let output = `<code style='color:red;'>Error encountered in Question ${parser.question + 1} on <b title="This excludes comments and blank lines.">interpreted line</b> ${i + 1}.<br>${e}</code>`;
+            let output = `<code style='color:red;'>Error encountered in Question ${parser.question + 1} on <b title="This excludes comments and blank lines.">interpreted line</b> ${Number(i) + 1}.<br>${e}</code>`;
             return output;
         }
     }
