@@ -27,12 +27,14 @@ interpretCode = (working) => {
     parser.inAnswer = false;
     parser.declaredFeedback = false;
 
+    parser.warnings = []
+
     parser.questions = []
 
     for (let i in removedComments) { // go line by line
-        try {
-            let line = removedComments[i];
-        
+        let line = removedComments[i];
+
+        try {        
             if (line.slice(0, 8) == "Question") { // question
                 parser.inQuestion = true;
                 parser.question++;
@@ -106,11 +108,13 @@ interpretCode = (working) => {
                 continue;
             }
 
-            throw `Non-indicative statement made outside of comment: ${line}`
+            const cleanLine = line.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            parser.warnings.push(`<code style='color:orange;'><b>Warning</b> for Question ${parser.question + 1} on <b title="This excludes comments and blank lines.">interpreted line</b> ${Number(i) + 1}. The line was skipped.<br>Non-indicative statement made outside of comment.<br><br>Problematic line:<br><br>"<em>${cleanLine}</em>"</code>`)
 
         } catch (e) {
-            let output = `<code style='color:red;'>Error encountered in Question ${parser.question + 1} on <b title="This excludes comments and blank lines.">interpreted line</b> ${Number(i) + 1}.<br>${e}</code>`;
-            return output;
+            const cleanLine = line.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const output = `<code style='color:red;'>Error encountered in Question ${parser.question + 1} on <b title="This excludes comments and blank lines.">interpreted line</b> ${Number(i) + 1}.<br>${e}<br><br>Problematic line:<br><br>"<em>${cleanLine}</em>"</code>`;
+            return output;        
         }
     }
 
@@ -215,7 +219,12 @@ interpretCode = (working) => {
 
     interpreted.code += `e.answer_feedback_json = ${feedback};\n`
 
-    let output = `<code>${interpreted.code.replaceAll("\n","<br>")}</code>`
+    let output = `<code>${interpreted.code.replace(/</g, '&lt;').replace(/>/g, '&gt;').replaceAll("\n","<br>")}</code>`
+
+    for (i in parser.warnings) {
+        output += parser.warnings[i]
+    }
+
     return output;
 }
 
@@ -226,7 +235,7 @@ document.getElementById("submit_script").addEventListener("click", () => {
 });
 
 document.getElementById("copy_code").addEventListener("click", () => {
-    let codeOut = document.getElementById("outputArea");
+    let codeOut = document.getElementById("outputArea").children[0];
     let range = document.createRange();
     range.selectNodeContents(codeOut);
     let selection = window.getSelection();
