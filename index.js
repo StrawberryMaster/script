@@ -40,7 +40,9 @@ interpretCode = (working) => {
                 parser.inAnswer = false;
                 parser.declaredFeedback = false;
 
-                let question = line.split(":")[1]; // since the format is "Question ___: [question goes here]"
+                let question = line.split(":"); // since the format is "Question ___: [question goes here]"
+                question.splice(0,1)
+                question = question.join(":")
                 if (question[0] == " ") { // remove any space after the colon
                     question = question.slice(1, question.length);
                 }
@@ -65,7 +67,9 @@ interpretCode = (working) => {
                 parser.answer++;
                 parser.declaredFeedback = false;
 
-                let answer = line.split("-")[1];
+                let answer = line.split("-");
+                answer.splice(0,1)
+                answer = answer.join("-")
                 if (answer[0] == " ") { // remove any spaces after the dash
                     answer = answer.slice(1, answer.length);
                 }
