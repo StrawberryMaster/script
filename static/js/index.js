@@ -1,3 +1,14 @@
+const cleanSpace = (string, end=false) => {
+    string = end ? string.split('').reverse().join('') : string;
+    for (let i in string) {
+        if (string[i] != " ") {
+            string = string.slice(Number(i), string.length);
+            string = end ? string.split('').reverse().join('') : string;
+            return string;
+        }
+    }
+}
+
 interpretCode = (working) => {
 
     parser = {}
@@ -13,10 +24,9 @@ interpretCode = (working) => {
             return;
         }
 
-        // remove spaces at the end of the line caused by comment removal
-        if (split[split.length - 1] == " ") {
-            split = split.slice(0, split.length - 1);
-        }
+        // remove spaces at line start and at the end of the line caused by comment removal
+        split = cleanSpace(split, true);
+        split = cleanSpace(split)
 
         removedComments.push(split);
     })
@@ -45,9 +55,7 @@ interpretCode = (working) => {
                 let question = line.split(":"); // since the format is "Question ___: [question goes here]"
                 question.splice(0,1)
                 question = question.join(":")
-                if (question[0] == " ") { // remove any space after the colon
-                    question = question.slice(1, question.length);
-                }
+                question = cleanSpace(question); // remove any space after the colon
 
                 parser.questions.push({
                     question: question,
@@ -72,9 +80,7 @@ interpretCode = (working) => {
                 let answer = line.split("-");
                 answer.splice(0,1)
                 answer = answer.join("-")
-                if (answer[0] == " ") { // remove any spaces after the dash
-                    answer = answer.slice(1, answer.length);
-                }
+                answer = cleanSpace(answer); // remove any spaces after the dash
 
                 parser.questions[parser.question].answers.push({
                     answer: answer,
@@ -97,12 +103,8 @@ interpretCode = (working) => {
                 let feedback = line.slice(1, line.length - 1); // remove brackets
 
                 // remove spaces so it can look like ( [feedback] )
-                if (feedback[0] == " ") {
-                    feedback = feedback.slice(1, feedback.length);
-                }
-                if (feedback[feedback.length - 1] == " ") { 
-                    feedback = feedback.slice(0, feedback.length - 1);
-                }
+                feedback = cleanSpace(feedback);
+                feedback = cleanSpace(feedback, true);
 
                 parser.questions[parser.question].answers[parser.answer].feedback = feedback;
                 continue;
@@ -129,32 +131,32 @@ interpretCode = (working) => {
     // templates
 
     const question_template = {
-    "model": "campaign_trail.question",
-    "pk": 1000,
-    "fields": {
-        "priority": 1,
-        "description": "Do you agree?",
-        "likelihood": 1
-    }
+        "model": "campaign_trail.question",
+        "pk": 1000,
+        "fields": {
+            "priority": 1,
+            "description": "Do you agree?",
+            "likelihood": 1
+        }
     }
 
     const answer_template = {
-    "model": "campaign_trail.answer",
-    "pk": 2000,
-    "fields": {
-        "question": 1000,
-        "description": "I agree."
-    }
+        "model": "campaign_trail.answer",
+        "pk": 2000,
+        "fields": {
+            "question": 1000,
+            "description": "I agree."
+        }
     }
 
     const feedback_template = {
-    "model": "campaign_trail.answer_feedback",
-    "pk": 3000,
-    "fields": {
-        "answer": 2000,
-        "candidate": 300,
-        "answer_feedback": "You agree."
-    }
+        "model": "campaign_trail.answer_feedback",
+        "pk": 3000,
+        "fields": {
+            "answer": 2000,
+            "candidate": 300,
+            "answer_feedback": "You agree."
+        }
     }
 
     // init
