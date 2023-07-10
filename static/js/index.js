@@ -116,7 +116,7 @@ interpretCode = (working) => {
                 continue;
             }
 
-            if (line.slice(0, 7) == "Affects") { // question
+            if (line.slice(0, 7) == "Affects" || line[0] == "+") { // question
                 if (!parser.inAnswer) {
                     throw "Answer effect declared outside of answer block."
                 }
