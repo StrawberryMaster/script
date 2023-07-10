@@ -50,7 +50,7 @@ interpretCode = (working) => {
         let line = removedComments[i];
 
         try {        
-            if (line.slice(0, 8) == "Question") { // question
+            if (line.slice(0, 8).toLowerCase() == "question") { // question
                 parser.inQuestion = true;
                 parser.question++;
                 parser.answer = -1;
@@ -91,6 +91,7 @@ interpretCode = (working) => {
                     answer: answer,
                     feedback: null, // ignore if null, but importantly shouldn't ignore if just "()"
                     global_effect: [], // ignore if length = 0
+                    state_effect: [], // ignore if length = 0
                 })
                 
                 continue;
@@ -116,7 +117,85 @@ interpretCode = (working) => {
                 continue;
             }
 
-            if (line.slice(0, 7) == "Affects" || line[0] == "+") { // question
+            if (line.slice(0, 13).toLowerCase() == "affects state" || line.slice(0, 2) == "+*") { // state effect
+                if (!parser.inAnswer) {
+                    throw "State answer effect declared outside of answer block."
+                }
+
+                let question = cleanSpace(line)
+
+                question = question.split(" "); // format is "Affects state __ [by] __ [for] __"
+                if (question.length <= 2) {
+                    throw "State answer effect not specified."
+                }
+
+                if (line.slice(0, 2) == "+*") question.splice(0, 1); 
+                else question.splice(0, 2); // remove "affects state"
+
+                let targetState = question[0];
+
+                if (isNaN(Number(targetState))) { // target is a name
+                    targetState = targetState.replaceAll("_", " ");
+                    parser.alias.push({
+                        alias: `"[REPLACE THIS VERY SPECIFIC STATE NAME STRING WITH ${targetState}]"`,
+                        to: `e.states_json[e.states_json.map(f=>f.fields.name).indexOf("${targetState}")].pk`
+                    })
+                    targetState = `[REPLACE THIS VERY SPECIFIC STATE NAME STRING WITH ${targetState}]`;
+                    question.splice(0, 1);
+                } else { // target is a pk
+                    targetState = Number(targetState)
+                    question.splice(0, 1);
+                }
+
+                if (isNaN(Number(question[0]))) { // remove any connectives in the next word
+                    question.splice(0,1)
+                }
+
+                if (question.length > 3 || question.length == 1) {
+                    throw "Improper number of arguments for state effect."
+                }
+
+                if (isNaN(Number(question[0]))) {
+                    throw "Non-numerical state effect specified."
+                }
+
+                let amount = Number(question[0]);
+                
+                question.splice(0,1)
+
+                if (question.length != 1 && isNaN(Number(question[0]))) { // remove any connectives in the next word
+                    question.splice(0,1)
+                }
+
+                if (question.length != 1) {
+                    throw "Improper arguments for state effect."
+                }
+
+                let target = question[0];
+
+                if (isNaN(Number(target))) { // target is a name or self
+                    if (target.toLowerCase() == "self") {
+                        target = `[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]`;
+                    } else {
+                        target = target.replaceAll("_", " ");
+                        parser.alias.push({
+                            alias: `"[REPLACE THIS VERY SPECIFIC NAME STRING WITH ${target}]"`,
+                            to: `[e.candidate_id, ...e.opponents_list][[e.candidate_id, ...e.opponents_list].map(f=>e.candidate_json[e.candidate_json.map(f=>f.pk).indexOf(f)].fields.last_name).indexOf("${target}")]`
+                        })
+                        target = `[REPLACE THIS VERY SPECIFIC NAME STRING WITH ${target}]`;
+                    }
+                    question.splice(0, 1);
+                } else { // target is a pk
+                    target = Number(target)
+                    question.splice(0, 1);
+                }
+
+                parser.questions[parser.question].answers[parser.answer].state_effect.push([targetState, target, amount]);
+
+                continue;
+            }
+
+            if (line.slice(0, 7).toLowerCase() == "affects" || line[0] == "+") { // global effect
                 if (!parser.inAnswer) {
                     throw "Answer effect declared outside of answer block."
                 }
@@ -136,6 +215,7 @@ interpretCode = (working) => {
                     if (target.toLowerCase() == "self") {
                         target = `[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]`;
                     } else {
+                        target = target.replaceAll("_", " ");
                         parser.alias.push({
                             alias: `"[REPLACE THIS VERY SPECIFIC NAME STRING WITH ${target}]"`,
                             to: `[e.candidate_id, ...e.opponents_list][[e.candidate_id, ...e.opponents_list].map(f=>e.candidate_json[e.candidate_json.map(f=>f.pk).indexOf(f)].fields.last_name).indexOf("${target}")]`
@@ -227,12 +307,25 @@ interpretCode = (working) => {
         }
     }
 
+    const state_effect_template = {
+        "model": "campaign_trail.answer_score_state",
+        "pk": 10000,
+        "fields": {
+          "answer": 2000,
+          "state": 1100,
+          "candidate": 300,
+          "affected_candidate": 300,
+          "state_multiplier": 0.1
+        }
+    }
+
     // init
 
     interpreted.questions = [];
     interpreted.answers = [];
     interpreted.feedback = [];
     interpreted.globals = [];
+    interpreted.stateEffs = [];
 
     // make code
 
@@ -285,7 +378,7 @@ interpretCode = (working) => {
                 // [target, amount]
 
                 parser.questions[i].answers[_i].global_effect.forEach(f=> {
-                    let global_pk = 4000 + (Number(i) * 4) + Number(_i);
+                    let global_pk = 4000 + (Number(i) * 20) + Number(_i);
                     let target = f[0];
                     let amount = f[1];
 
@@ -300,6 +393,29 @@ interpretCode = (working) => {
                     interpreted.globals.push(global_eff);
                 })
             }
+
+            if (parser.questions[i].answers[_i].state_effect.length > 0) {
+                // state effect
+                // [targetState, target, amount]
+
+                parser.questions[i].answers[_i].state_effect.forEach(f=> {
+                    let global_pk = 10000 + (Number(i) * 50) + Number(_i);
+                    let targetState = f[0];
+                    let target = f[1];
+                    let amount = f[2];
+
+                    let state_eff = strCopy(state_effect_template);
+
+                    state_eff.pk = global_pk;
+                    state_eff.fields.answer = answer_pk;
+                    state_eff.fields.state = targetState;
+                    state_eff.fields.candidate = "[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]";
+                    state_eff.fields.affected_candidate = target;
+                    state_eff.fields.state_multiplier = amount;
+
+                    interpreted.stateEffs.push(state_eff);
+                })
+            }
         }
     }
 
@@ -307,6 +423,7 @@ interpretCode = (working) => {
     interpreted.code += `e.answers_json = ${JSON.stringify(interpreted.answers)};\n`;
     interpreted.code += `e.answer_feedback_json = ${JSON.stringify(interpreted.feedback)};\n`;
     interpreted.code += `e.answer_score_global_json = ${JSON.stringify(interpreted.globals)};\n`;
+    interpreted.code += `e.answer_score_state_json = ${JSON.stringify(interpreted.stateEffs)};\n`;
 
     // replace alias here:
     for (let i in parser.alias) {
