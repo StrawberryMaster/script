@@ -67,6 +67,7 @@ body {
     border: 1px solid #ccc;
     white-space: pre-wrap;
     user-select: text;
+    overflow-wrap: break-word;
 }
 
 img {

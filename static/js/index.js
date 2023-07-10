@@ -36,6 +36,11 @@ interpretCode = (working) => {
     parser.answer = -1;
     parser.inAnswer = false;
     parser.declaredFeedback = false;
+    
+    parser.alias = [{
+        alias: `"[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]"`,
+        to: "e.candidate_id"
+    }]
 
     parser.warnings = []
 
@@ -84,7 +89,8 @@ interpretCode = (working) => {
 
                 parser.questions[parser.question].answers.push({
                     answer: answer,
-                    feedback: null // ignore if null, but importantly shouldn't ignore if just "()"
+                    feedback: null, // ignore if null, but importantly shouldn't ignore if just "()"
+                    global_effect: [], // ignore if length = 0
                 })
                 
                 continue;
@@ -107,6 +113,57 @@ interpretCode = (working) => {
                 feedback = cleanSpace(feedback, true);
 
                 parser.questions[parser.question].answers[parser.answer].feedback = feedback;
+                continue;
+            }
+
+            if (line.slice(0, 7) == "Affects") { // question
+                if (!parser.inAnswer) {
+                    throw "Answer effect declared outside of answer block."
+                }
+
+                let question = cleanSpace(line)
+
+                question = question.split(" "); // format is "Affects __ [by] __"
+                if (question.length == 1) {
+                    throw "Answer effect not specified."
+                }
+
+                question.splice(0, 1); // remove "Affects"
+
+                let target = question[0];
+
+                if (isNaN(Number(target))) { // target is a name or self
+                    if (target.toLowerCase() == "self") {
+                        target = `[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]`;
+                    } else {
+                        parser.alias.push({
+                            alias: `"[REPLACE THIS VERY SPECIFIC NAME STRING WITH ${target}]"`,
+                            to: `[e.candidate_id, ...e.opponents_list][[e.candidate_id, ...e.opponents_list].map(f=>e.candidate_json[e.candidate_json.map(f=>f.pk).indexOf(f)].fields.last_name).indexOf("${target}")]`
+                        })
+                        target = `[REPLACE THIS VERY SPECIFIC NAME STRING WITH ${target}]`;
+                    }
+                    question.splice(0, 1);
+                } else { // target is a pk
+                    target = Number(target)
+                    question.splice(0, 1);
+                }
+
+                if (isNaN(Number(question[0]))) { // remove any connectives in the next word
+                    question.splice(0,1)
+                }
+
+                if (question.length != 1) {
+                    throw "Improper number of arguments for global effect."
+                }
+
+                if (isNaN(Number(question[0]))) {
+                    throw "Non-numerical global effect specified."
+                }
+
+                let amount = Number(question[0]);
+
+                parser.questions[parser.question].answers[parser.answer].global_effect.push([target, amount]);
+
                 continue;
             }
 
@@ -159,11 +216,23 @@ interpretCode = (working) => {
         }
     }
 
+    const global_effect_template = {
+        "model": "campaign_trail.answer_score_global",
+        "pk": 4000,
+        "fields": {
+          "answer": 2000,
+          "candidate": 300,
+          "affected_candidate": 300,
+          "global_multiplier": 0.1
+        }
+    }
+
     // init
 
     interpreted.questions = [];
     interpreted.answers = [];
     interpreted.feedback = [];
+    interpreted.globals = [];
 
     // make code
 
@@ -194,32 +263,55 @@ interpretCode = (working) => {
 
             interpreted.answers.push(answer);
 
-            if (!parser.questions[i].answers[_i].feedback) continue;
+            if (parser.questions[i].answers[_i].feedback) {
+                // feedback
 
-            // feedback
+                let feedback_pk = 3000 + (Number(i) * 4) + Number(_i);
+                let ans_feedback = parser.questions[i].answers[_i].feedback;
+                let candidate = "[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]";
 
-            let feedback_pk = 3000 + (Number(i) * 4) + Number(_i);
-            let ans_feedback = parser.questions[i].answers[_i].feedback;
-            let candidate = "[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]";
+                let feedback = strCopy(feedback_template);
+                
+                feedback.pk = feedback_pk;
+                feedback.fields.answer = answer_pk;
+                feedback.fields.candidate = candidate;
+                feedback.fields.answer_feedback = ans_feedback;
 
-            let feedback = strCopy(feedback_template);
-            
-            feedback.pk = feedback_pk;
-            feedback.fields.answer = answer_pk;
-            feedback.fields.candidate = candidate;
-            feedback.fields.answer_feedback = ans_feedback;
+                interpreted.feedback.push(feedback);
+            }
 
-            interpreted.feedback.push(feedback);
+            if (parser.questions[i].answers[_i].global_effect.length > 0) {
+                // global effect
+                // [target, amount]
+
+                parser.questions[i].answers[_i].global_effect.forEach(f=> {
+                    let global_pk = 4000 + (Number(i) * 4) + Number(_i);
+                    let target = f[0];
+                    let amount = f[1];
+
+                    let global_eff = strCopy(global_effect_template);
+
+                    global_eff.pk = global_pk;
+                    global_eff.fields.answer = answer_pk;
+                    global_eff.fields.candidate = "[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]";
+                    global_eff.fields.affected_candidate = target;
+                    global_eff.fields.global_multiplier = amount;
+
+                    interpreted.globals.push(global_eff);
+                })
+            }
         }
     }
 
-    interpreted.code += `e.questions_json = ${JSON.stringify(interpreted.questions)};\n`
-    interpreted.code += `e.answers_json = ${JSON.stringify(interpreted.answers)};\n`
+    interpreted.code += `e.questions_json = ${JSON.stringify(interpreted.questions)};\n`;
+    interpreted.code += `e.answers_json = ${JSON.stringify(interpreted.answers)};\n`;
+    interpreted.code += `e.answer_feedback_json = ${JSON.stringify(interpreted.feedback)};\n`;
+    interpreted.code += `e.answer_score_global_json = ${JSON.stringify(interpreted.globals)};\n`;
 
-    let feedback = JSON.stringify(interpreted.feedback)
-    feedback = feedback.replaceAll(`"[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]"`, "e.candidate_id")
-
-    interpreted.code += `e.answer_feedback_json = ${feedback};\n`
+    // replace alias here:
+    for (let i in parser.alias) {
+        interpreted.code = interpreted.code.replaceAll(parser.alias[i].alias, parser.alias[i].to);
+    }
 
     let output = `<code>${interpreted.code.replace(/</g, '&lt;').replace(/>/g, '&gt;').replaceAll("\n","<br>")}</code>`
 
