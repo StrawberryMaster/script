@@ -128,8 +128,8 @@ interpretCode = (working) => {
     parser.inAnswer = false;
     parser.declaredFeedback = false;
 
-    parser.questions = []
-
+    parser.questions = [];
+    
     for (let i in final_lines) { // go line by line
         let line = final_lines[i];
 
@@ -407,8 +407,6 @@ interpretCode = (working) => {
 
     interpreted = {}
 
-    interpreted.code = `// Generated with CampaignScript, report any issues (with CampaignScript) to Decstar.\n\ne = campaignTrail_temp;\n` // e=campaignTrail_temp is the only way to write code don't @ me
-
     strCopy = f => JSON.parse(JSON.stringify(f));
 
     // templates
@@ -599,6 +597,16 @@ interpretCode = (working) => {
         }
     }
 
+    interpreted.code = ``;
+
+    if (parser.config["hide_comment"] == null) {
+        interpreted.code += `// Generated with CampaignScript, report any issues (with CampaignScript) to Decstar.\n\n` 
+    }
+
+    if (parser.config["hide_init"] == null) {
+        interpreted.code += `e = campaignTrail_temp;\n`// e=campaignTrail_temp is the only way to write code don't @ me
+    }
+
     if ((parser.config["defaults"] || parser.config["build_cand"] != null) && parser.config["!build_cand"] == null) {
         interpreted.code += `const findCandidate = (id) => e.candidate_json.find(f => f.pk === id);\ne.candidate_last_name = findCandidate(e.candidate_id).fields.last_name;\ne.candidate_image_url = findCandidate(e.candidate_id).fields.image_url;\ne.running_mate_last_name = findCandidate(e.running_mate_id).fields.last_name;\ne.running_mate_image_url = findCandidate(e.running_mate_id).fields.image_url;\n`
     }
@@ -608,12 +616,18 @@ interpretCode = (working) => {
         interpreted.code += `e.running_mate_issue_score_json = [];\ne.issues_json.forEach((f,_i)=>e.running_mate_issue_score_json.push({"model":"campaign_trail.candidate_issue_score","pk":110000+_i,"fields":{"candidate":e.running_mate_id,"issue":f.pk,"issue_score":0}}))\n`;
     }
 
-    interpreted.code += `e.questions_json = ${JSON.stringify(interpreted.questions)};\n`;
-    interpreted.code += `e.answers_json = ${JSON.stringify(interpreted.answers)};\n`;
-    interpreted.code += `e.answer_feedback_json = ${JSON.stringify(interpreted.feedback)};\n`;
-    interpreted.code += `e.answer_score_global_json = ${JSON.stringify(interpreted.globals)};\n`;
-    interpreted.code += `e.answer_score_state_json = ${JSON.stringify(interpreted.stateEffs)};\n`;
-    interpreted.code += `e.answer_score_issue_json = ${JSON.stringify(interpreted.issueEffs)};\n`;
+    if (parser.config["hide_questions"] == null)
+        interpreted.code += `e.questions_json = ${JSON.stringify(interpreted.questions)};\n`;
+    if (parser.config["hide_answers"] == null)
+        interpreted.code += `e.answers_json = ${JSON.stringify(interpreted.answers)};\n`;
+    if (parser.config["hide_feedback"] == null)
+        interpreted.code += `e.answer_feedback_json = ${JSON.stringify(interpreted.feedback)};\n`;
+    if (parser.config["hide_global_eff"] == null)
+        interpreted.code += `e.answer_score_global_json = ${JSON.stringify(interpreted.globals)};\n`;
+    if (parser.config["hide_state_eff"] == null)
+        interpreted.code += `e.answer_score_state_json = ${JSON.stringify(interpreted.stateEffs)};\n`;
+    if (parser.config["hide_issue_eff"] == null)
+        interpreted.code += `e.answer_score_issue_json = ${JSON.stringify(interpreted.issueEffs)};\n`;
 
     // replace alias here:
     for (let i in parser.alias) {
