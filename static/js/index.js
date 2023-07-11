@@ -90,8 +90,9 @@ interpretCode = (working) => {
                 parser.questions[parser.question].answers.push({
                     answer: answer,
                     feedback: null, // ignore if null, but importantly shouldn't ignore if just "()"
-                    global_effect: [], // ignore if length = 0
-                    state_effect: [], // ignore if length = 0
+                    global_effect: [],
+                    state_effect: [], 
+                    issue_effect: [], 
                 })
                 
                 continue;
@@ -114,6 +115,71 @@ interpretCode = (working) => {
                 feedback = cleanSpace(feedback, true);
 
                 parser.questions[parser.question].answers[parser.answer].feedback = feedback;
+                continue;
+            }
+
+            if (line.slice(0, 13).toLowerCase() == "affects issue" || line.slice(0, 2) == "+-") { // issue effect
+                if (!parser.inAnswer) {
+                    throw "Issue answer effect declared outside of answer block."
+                }
+
+                let question = cleanSpace(line)
+
+                question = question.split(" "); // format is "Affects issue __ [by] __ [with] __"
+                if (question.length <= 2) {
+                    throw "Issue answer effect not specified."
+                }
+
+                if (line.slice(0, 2) == "+-") question.splice(0, 1); 
+                else question.splice(0, 2); // remove "affects issue"
+
+                let targetIssue = question[0];
+
+                if (isNaN(Number(targetIssue))) { // target is a pk of format "pk_101"
+                    if (targetIssue.replaceAll("pk_", "") == targetIssue) throw "Improperly formatted issue score PK.; should be pk_[pk number goes here]."
+                    targetIssue = targetIssue.replaceAll("pk_", "")
+                    targetIssue = Number(targetIssue)
+                    question.splice(0, 1);
+                } else { // target is a pk
+                    parser.alias.push({
+                        alias: `"[REPLACE THIS VERY SPECIFIC ISSUE NAME STRING WITH ${targetIssue}]"`,
+                        to: `e.issues_json[${Number(targetIssue) - 1}].pk`
+                    })
+                    targetIssue = `[REPLACE THIS VERY SPECIFIC ISSUE NAME STRING WITH ${targetIssue}]`;
+
+                    question.splice(0, 1);
+                }
+
+                if (isNaN(Number(question[0]))) { // remove any connectives in the next word
+                    question.splice(0,1)
+                }
+
+                if (isNaN(Number(question[0]))) {
+                    throw "Non-numerical issue effect specified."
+                }
+
+                let amount = Number(question[0]);
+                
+                question.splice(0,1)
+
+                if (question.length != 1 && isNaN(Number(question[0]))) { // remove any connectives in the next word
+                    question.splice(0,1)
+                }
+
+                if (question.length != 1) {
+                    throw "Improper arguments for issue effect."
+                }
+
+                let importance = question[0];
+
+                if (isNaN(Number(importance))) {
+                    throw "Non-numerical issue importance specified."
+                }
+
+                importance = Number(importance);
+
+                parser.questions[parser.question].answers[parser.answer].issue_effect.push([targetIssue, amount, importance]);
+
                 continue;
             }
 
@@ -149,10 +215,6 @@ interpretCode = (working) => {
 
                 if (isNaN(Number(question[0]))) { // remove any connectives in the next word
                     question.splice(0,1)
-                }
-
-                if (question.length > 3 || question.length == 1) {
-                    throw "Improper number of arguments for state effect."
                 }
 
                 if (isNaN(Number(question[0]))) {
@@ -318,6 +380,17 @@ interpretCode = (working) => {
           "state_multiplier": 0.1
         }
     }
+    
+    const issue_effect_template = {
+        "model": "campaign_trail.answer_score_issue",
+        "pk": 50000,
+        "fields": {
+          "answer": 2000,
+          "issue": 110,
+          "issue_score": 1,
+          "issue_importance": 1
+        }
+    }
 
     // init
 
@@ -326,6 +399,7 @@ interpretCode = (working) => {
     interpreted.feedback = [];
     interpreted.globals = [];
     interpreted.stateEffs = [];
+    interpreted.issueEffs = [];
 
     // make code
 
@@ -416,6 +490,28 @@ interpretCode = (working) => {
                     interpreted.stateEffs.push(state_eff);
                 })
             }
+
+            if (parser.questions[i].answers[_i].issue_effect.length > 0) {
+                // issue effect
+                // [targetIssue, amount, importance]
+
+                parser.questions[i].answers[_i].issue_effect.forEach(f=> {
+                    let issue_pk = 50000 + (Number(i) * 50) + Number(_i);
+                    let targetIssue = f[0];
+                    let amount = f[1];
+                    let importance = f[2];
+
+                    let issue_eff = strCopy(issue_effect_template);
+
+                    issue_eff.pk = issue_pk;
+                    issue_eff.fields.answer = answer_pk;
+                    issue_eff.fields.issue = targetIssue;
+                    issue_eff.fields.issue_score = amount;
+                    issue_eff.fields.issue_importance = importance;
+
+                    interpreted.issueEffs.push(issue_eff);
+                })
+            }
         }
     }
 
@@ -424,6 +520,7 @@ interpretCode = (working) => {
     interpreted.code += `e.answer_feedback_json = ${JSON.stringify(interpreted.feedback)};\n`;
     interpreted.code += `e.answer_score_global_json = ${JSON.stringify(interpreted.globals)};\n`;
     interpreted.code += `e.answer_score_state_json = ${JSON.stringify(interpreted.stateEffs)};\n`;
+    interpreted.code += `e.answer_score_issue_json = ${JSON.stringify(interpreted.issueEffs)};\n`;
 
     // replace alias here:
     for (let i in parser.alias) {
