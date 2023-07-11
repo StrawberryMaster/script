@@ -31,23 +31,101 @@ interpretCode = (working) => {
         removedComments.push(split);
     })
 
-    parser.question = -1;
-    parser.inQuestion = false;
-    parser.answer = -1;
-    parser.inAnswer = false;
-    parser.declaredFeedback = false;
+    // check for config data
+
+    parser.inConfig = false;
+    parser.config = {}
+
+    parser.warnings = []
+
+    let final_lines = []
+
+    parser.alias = []
+
+    removedComments.forEach((f, i) => {
+        try {
+            if (f[0] == ";") { // config line
+                f = f.substr(1,f.length)
+                f = cleanSpace(f);
     
+                if (f == null) {
+                    parser.inConfig = false;
+                    return;
+                }
+    
+                if (f.slice(0, 6).toLowerCase() == "config") { // declared config
+                    parser.inConfig = true;
+                    return
+                }
+    
+                // else end config
+    
+                parser.inConfig = false;
+    
+                return;
+            }
+
+            if (parser.inConfig) {
+                if (f.slice(0, 5) == "alias") {
+                    let line = f.substr(6, f.length);
+
+                    line = line.split("=");
+                    line = line.map(f => {
+                        f = cleanSpace(f);
+                        f = cleanSpace(f, true);
+                        return f;
+                    });
+
+                    let config_statement = line.splice(0, 1);
+                    let remainder = line.join("=");
+                    
+                    parser.alias.push([`%${config_statement}`, remainder]);
+
+                    return;
+                }
+                let line = f.split("=");
+                line = line.map(f => {
+                    f = cleanSpace(f);
+                    f = cleanSpace(f, true);
+                    return f;
+                }); // clean spaces around it
+    
+                let config_statement = line.splice(0, 1);
+                let remainder = line.join("=");
+    
+                parser.config[config_statement] = remainder;
+                return;
+            }
+
+            final_lines.push(f);
+        } catch (e) {
+            parser.warnings.push(`<code style='color:orange;'><b>Warning:</b> invalid config line on <b title="This excludes comments and blank lines.">interpreted line</b> ${Number(i) + 1}. The line was skipped.</code>`)
+        }
+    })
+
+    let fL = final_lines.join("\n");
+    parser.alias.forEach(f=>{
+        fL = fL.replaceAll(f[0], f[1])
+    });
+    final_lines = fL.split("\n");
+
     parser.alias = [{
         alias: `"[REPLACE THIS VERY SPECIFIC STRING WITH e.candidate_id]"`,
         to: "e.candidate_id"
     }]
 
-    parser.warnings = []
+    parser.inConfig = false;
+
+    parser.question = -1;
+    parser.inQuestion = false;
+    parser.answer = -1;
+    parser.inAnswer = false;
+    parser.declaredFeedback = false;
 
     parser.questions = []
 
-    for (let i in removedComments) { // go line by line
-        let line = removedComments[i];
+    for (let i in final_lines) { // go line by line
+        let line = final_lines[i];
 
         try {        
             if (line.slice(0, 8).toLowerCase() == "question") { // question
@@ -513,6 +591,10 @@ interpretCode = (working) => {
                 })
             }
         }
+    }
+
+    if (parser.config["auto_build_cand"] != null) {
+        interpreted.code += `const findCandidate = (id) => e.candidate_json.find(f => f.pk === id);\ne.candidate_last_name = findCandidate(e.candidate_id).fields.last_name;\ne.candidate_image_url = findCandidate(e.candidate_id).fields.image_url;\ne.running_mate_last_name = findCandidate(e.running_mate_id).fields.last_name;\ne.running_mate_image_url = findCandidate(e.running_mate_id).fields.image_url;\n`
     }
 
     interpreted.code += `e.questions_json = ${JSON.stringify(interpreted.questions)};\n`;
