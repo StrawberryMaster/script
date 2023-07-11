@@ -44,6 +44,12 @@ interpretCode = (working) => {
 
     removedComments.forEach((f, i) => {
         try {
+            if (i == 0 && f.toLowerCase() == "defaults") {
+                parser.config["defaults"] = true;
+
+                return;
+            }
+
             if (f[0] == ";") { // config line
                 f = f.substr(1,f.length)
                 f = cleanSpace(f);
@@ -593,8 +599,13 @@ interpretCode = (working) => {
         }
     }
 
-    if (parser.config["auto_build_cand"] != null) {
+    if ((parser.config["defaults"] || parser.config["build_cand"] != null) && parser.config["!build_cand"] == null) {
         interpreted.code += `const findCandidate = (id) => e.candidate_json.find(f => f.pk === id);\ne.candidate_last_name = findCandidate(e.candidate_id).fields.last_name;\ne.candidate_image_url = findCandidate(e.candidate_id).fields.image_url;\ne.running_mate_last_name = findCandidate(e.running_mate_id).fields.last_name;\ne.running_mate_image_url = findCandidate(e.running_mate_id).fields.image_url;\n`
+    }
+
+    if ((parser.config["defaults"] || parser.config["suppress_cand_issues"] != null) && parser.config["!suppress_cand_issues"] == null) {
+        interpreted.code += `e.candidate_issue_score_json = [];\n[e.candidate_id, ...e.opponents_list].forEach((_f,i) => {e.issues_json.forEach((f,_i)=>e.candidate_issue_score_json.push({"model":"campaign_trail.candidate_issue_score","pk":100000+(Number(i)*10)+_i,"fields":{"candidate":_f,"issue":f.pk,"issue_score":0}}))})\n`;
+        interpreted.code += `e.running_mate_issue_score_json = [];\ne.issues_json.forEach((f,_i)=>e.running_mate_issue_score_json.push({"model":"campaign_trail.candidate_issue_score","pk":110000+_i,"fields":{"candidate":e.running_mate_id,"issue":f.pk,"issue_score":0}}))\n`;
     }
 
     interpreted.code += `e.questions_json = ${JSON.stringify(interpreted.questions)};\n`;
