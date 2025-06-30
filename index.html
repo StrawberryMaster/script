@@ -26,11 +26,43 @@
 
     <div class="container">
         <h1>CampaignScript</h1>
-        <textarea id="codeInput" placeholder="Place CampaignScript to be interpreted here."></textarea>
-        <button id="submit_script">Submit</button> <button id="copy_code">Copy</button>
-        <div class="output" id="outputArea">
+        <div style="margin-bottom: 1em;">
+            <button id="mode_cs_to_tct" class="mode-btn" style="font-weight:bold;">CampaignScript → TCT</button>
+            <button id="mode_tct_to_cs" class="mode-btn">TCT → CampaignScript</button>
+        </div>
+        <div id="cs_to_tct_section">
+            <textarea id="codeInput" placeholder="Place CampaignScript to be interpreted here."></textarea>
+            <button id="submit_script">Submit</button> <button id="copy_code">Copy</button>
+            <div class="output" id="outputArea"></div>
+        </div>
+        <div id="tct_to_cs_section" style="display:none;">
+            <textarea id="decompileInput" placeholder="Paste mod code here."></textarea>
+            <button id="decompile_script">Convert to CampaignScript</button> <button id="copy_decompile">Copy</button>
+            <div class="output" id="decompileOutputArea"></div>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const btnCS2NCT = document.getElementById('mode_cs_to_tct');
+            const btnNCT2CS = document.getElementById('mode_tct_to_cs');
+            const sectionCS2NCT = document.getElementById('cs_to_tct_section');
+            const sectionNCT2CS = document.getElementById('tct_to_cs_section');
+
+            btnCS2NCT.addEventListener('click', function() {
+                btnCS2NCT.style.fontWeight = 'bold';
+                btnNCT2CS.style.fontWeight = 'normal';
+                sectionCS2NCT.style.display = '';
+                sectionNCT2CS.style.display = 'none';
+            });
+            btnNCT2CS.addEventListener('click', function() {
+                btnCS2NCT.style.fontWeight = 'normal';
+                btnNCT2CS.style.fontWeight = 'bold';
+                sectionCS2NCT.style.display = 'none';
+                sectionNCT2CS.style.display = '';
+            });
+        });
+    </script>
     <script src="/static/js/index.js"></script>
 
     <span id="example_script">CampaignScript example <a href="/tests/demo.txt" target="_blank">here</a>.</span>
